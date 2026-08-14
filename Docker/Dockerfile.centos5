@@ -1,46 +1,42 @@
 FROM centos:5 AS builder
-ARG CHINA_MIRROR=1
+ARG MIRROR=1
 WORKDIR /data
-COPY ./SOURCES/perl-*.tar.gz /data
 
-RUN MIRROR_URL=http://mirrors.ustc.edu.cn && \
-  sed -e 's|enabled=1|enabled=0|' -i /etc/yum/pluginconf.d/fastestmirror.conf && \
-  sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-      -e "s|^#baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=${MIRROR_URL}/centos-vault/5.11|g" \
-      -e "s|^#baseurl=http://mirror.centos.org/\$contentdir/\$releasever|baseurl=${MIRROR_URL}/centos-vault/5.11|g" \
-      -i.bak /etc/yum.repos.d/*.repo && \
+COPY ./Docker/ /data/docker/
+COPY ./downloads/perl-*.tar.gz /data/
+
+RUN export MIRROR="$MIRROR" && \
+    bash ./docker/modify_yum_source.sh && \
     yum install -y gcc44 make
 
 RUN mkdir -p perl && tar xfz perl-*.tar.gz --strip-components=1 -C perl && pushd perl && \
-	./Configure -des -Dusethreads -Uuseshrplib -Uoptimize=-g -Dcc=gcc44 -Dprefix=/usr/local/perl && \
-	make $(rpm --eval %{?_smp_mflags}) && make install_strip
+    ./Configure -des -Dusethreads -Uuseshrplib -Uoptimize=-g -Dcc=gcc44 -Dprefix=/usr/local/perl && \
+    make $(rpm --eval %{?_smp_mflags}) && make install_strip
+RUN rm -rf perl-*.tar.gz perl
 
 
 FROM centos:5
-COPY --from=builder /usr/local/perl /usr/local/perl
+ARG MIRROR=1
 ENV PATH=/usr/local/perl/bin:$PATH
+WORKDIR /data
 
-RUN MIRROR_URL=http://mirrors.ustc.edu.cn && \
-  sed -e 's|enabled=1|enabled=0|' -i /etc/yum/pluginconf.d/fastestmirror.conf && \
-  sed -e "s|^mirrorlist=|#mirrorlist=|g" \
-      -e "s|^#baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=${MIRROR_URL}/centos-vault/5.11|g" \
-      -e "s|^#baseurl=http://mirror.centos.org/\$contentdir/\$releasever|baseurl=${MIRROR_URL}/centos-vault/5.11|g" \
-      -i.bak /etc/yum.repos.d/*.repo && \
-    yum install -y epel-release && \
-    sed -e "/^mirrorlist/s|^|#|g" \
-      -e "s|^#baseurl=.\+$|baseurl=http://mirrors.aliyun.com/epel-archive/5/\$basearch|g" \
-      -i.bak /etc/yum.repos.d/epel*.repo && \
-    yum makecache && \
-    yum update -y
+COPY --from=builder /usr/local/perl /usr/local/perl
+COPY ./Docker/ /data/docker/
 
-RUN yum install -y wget autoconf automake gcc44 make rpm-build rpmdevtools \
-	util-linux-ng pcre-devel zlib-devel && \
-	useradd -m -u 1000 builder
+RUN export MIRROR="$MIRROR" && \
+    bash ./docker/modify_yum_source.sh && \
+    yum update -y && \
+    yum install -y wget autoconf automake gcc44 make rpm-build rpmdevtools \
+        util-linux-ng pcre-devel zlib-devel && \
+    useradd -m -u 1000 builder && \
+    mkdir -p /data/output && chown builder:builder /data/output
+
 RUN cat /etc/yum.repos.d/CentOS-Base.repo | sed 's|]$|-i386]|;s|\$basearch|i386|g' > /etc/yum.repos.d/CentOS-Base-i386.repo && \
-        yum install -y glibc-devel.i386 libgcc.i386 zlib-devel.i386 pcre-devel.i386 && \
-	    yum clean all 
+    yum install -y glibc-devel.i386 libgcc.i386 zlib-devel.i386 pcre-devel.i386 && \
+    yum clean all
+
 USER builder
 RUN echo -e "%dist .el5\n%centos 5\n" | tee -a ~/.rpmmacros
 RUN rpmdev-setuptree
 ENV CC=gcc44
-CMD ["/data/NGINX/rpmbuild.sh"]
+CMD ["/data/rpmbuild.sh"]
