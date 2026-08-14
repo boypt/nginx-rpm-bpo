@@ -9,7 +9,7 @@ Each distro builds inside its own Docker image, so you don't need an old CentOS 
 | Component | Version |
 |---|---|
 | NGINX | 1.30.4 |
-| Release | b2 |
+| Release | b3 |
 | OpenSSL (bundled) | openssl-3.5.7 |
 | Perl (el5 only, built into image) | perl-5.38.2 |
 
