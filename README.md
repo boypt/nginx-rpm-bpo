@@ -1,4 +1,4 @@
-# nginx-rpm-bpo
+# Nginx RPM Backport (nginx-rpm-bpo)
 
 Builds nginx RPMs backported to EOL CentOS releases (el5 / el6 / el7), with a modern OpenSSL statically bundled into nginx so the resulting RPM has **no runtime `openssl` dependency**.
 

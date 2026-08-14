@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Builds nginx RPMs backported to EOL CentOS (el5/el6/el7), with a modern OpenSSL statically bundled into nginx so the RPM has no runtime `openssl` dependency. Each distro builds inside its own Docker image.
+Nginx RPM Backport (`nginx-rpm-bpo`): builds nginx RPMs backported to EOL CentOS (el5/el6/el7), with a modern OpenSSL statically bundled into nginx so the RPM has no runtime `openssl` dependency. Each distro builds inside its own Docker image.
 
 ## Version bump
 
