@@ -8,10 +8,24 @@ Builds nginx RPMs backported to EOL CentOS (el5/el6/el7), with a modern OpenSSL 
 - For local overrides (e.g. custom `PKGREL`), create `version-local.env` (gitignored) — it is sourced after `version.env` and can override any variable.
 - The `.src.rpm` files in `SOURCE/` are only spec-file **templates** — `rpmbuild.sh` overwrites their version/release via `sed` from `version.env`, and the real nginx/openssl source comes from auto-downloaded tarballs.
 
+## Release process
+
+When releasing a new nginx version (e.g. `1.30.4`), follow this order:
+
+1. **Bump `NGINX_REL` in `version.env`** — if not already set, set it to `1` (build 1); if already set, increment the number (`1` → `2` → `3` ...). `NGINX_REL` is the build counter per nginx version; the `b` prefix appears only in the tag name (`v1.30.4_b2`), not in `version.env`.
+2. **Update `README.md`** — add/refresh the `## Version` section with the current `NGINX_VER`, release build (`bN`), `OPENSSL_VER`, and `PERL_VER`.
+3. **Commit** the changes (e.g. `chore: bump NGINX_REL to 2 for v1.30.4 release`).
+4. **Tag the commit** as `v${NGINX_VER}_b${NGINX_REL}` (e.g. `v1.30.4_b2`) and push the tag.
+
+Pushing the `v*` tag triggers `.github/workflows/build-rpm.yml`, which builds RPMs for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release. The built RPMs are **not** committed to the repo — only the tag/commit triggers the build.
+
+Deleting a test tag: `git push origin --delete v1.30.4_b2` (also delete the release on GitHub if one was created).
+
 ## Downloading tarballs
 
 - `rpmbuild.sh` auto-downloads `nginx-${NGINX_VER}.tar.gz` from `nginx.org` and `${OPENSSL_VER}.tar.gz` from GitHub Releases into the rpmbuild SOURCES dir before building. No manual tarball placement needed.
 - For pre-downloading outside Docker (e.g. CI caching), run `./pullsrc.sh` — it downloads nginx, openssl, and perl tarballs to `downloads/`.
+- The perl tarball is only needed to build the el5 image: CentOS 5 ships perl 5.8 (too old for modern OpenSSL/nginx), so `Dockerfile.centos5` compiles perl 5.38 into `/usr/local/perl` from `./downloads/perl-*.tar.gz`.
 
 ## Build commands
 
@@ -35,23 +49,30 @@ The repo root is mounted at `/data` inside the container. All scripts (`rpmbuild
 
 Building the el5 image requires `./downloads/perl-*.tar.gz` in the build context (referenced by `Dockerfile.centos5`). Run `./pullsrc.sh` first to download it.
 
-All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirrors instead of Chinese mirrors. `Docker/modify_yum_source.sh` handles the mirror switching.
+All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirrors instead of Chinese mirrors. `Docker/modify_yum_source.sh` handles the mirror switching. Note: el5 always uses `archive.kernel.org` over plain HTTP (its wget has no HTTPS support), regardless of the `MIRROR` arg; `MIRROR` only matters for el6/el7.
 
 ## rpmbuild.sh quirks
 
 - Determines `DIST` via `rpm --eval '%{?dist}'`. el5 has no matching src.rpm, so it reuses the `.el6` src.rpm and adds `--nomd5 --nosignature`.
+- Checks `/data/downloads/` for pre-downloaded tarballs first; falls back to downloading nginx/openssl sources itself (old el5 `wget` has no HTTPS support, so pre-download via `pullsrc.sh` is required there).
 - Patches `SPECS/nginx.spec` with `sed`: bumps `base_version`/`base_release`, adds `Source100` (openssl tarball), appends `--with-openssl=... --with-openssl-opt=no-tests`, extracts the openssl tarball during `%setup`/`%autosetup` (excluding tests), and deletes `Requires: openssl`.
 - `M32=1` switches to a 32-bit build: replaces `no-tests` with `linux-x86 no-tests`, adds `-m32` to `WITH_CC_OPT`/`WITH_LD_OPT`, and passes `--target=i686`.
-- Uses `sed -i.bak`, so `.bak` backup files are left beside `nginx.spec`.
+- Uses `sed -i.bak` for the main spec patch, but the M32 block uses `sed -i` (no backup). `.bak` files may be left beside `nginx.spec`.
 - Finished RPMs are copied to `/data/output/`.
 
 ## CI
 
 Two GitHub Actions workflows:
 
-- **`.github/workflows/build-images.yml`** — manual trigger (`workflow_dispatch`). Builds and pushes `ngxbuild:el5/el6/el7` images to `ghcr.io`. Passes `MIRROR=0` to use official CentOS vault mirrors.
+- **`.github/workflows/build-images.yml`** — manual trigger (`workflow_dispatch`). Builds and pushes `el5/el6/el7` images to `ghcr.io` as `ghcr.io/${{ github.repository }}:elX` (not `ngxbuild:elX` — that local tag is only for manual builds). Passes `MIRROR=0` to use official CentOS vault mirrors. Runs `./pullsrc.sh` first for the el5 build (needs the perl tarball in the build context).
 - **`.github/workflows/build-rpm.yml`** — triggers on `v*` tags. Pulls pre-built images from GHCR, runs builds for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release with zipped RPMs.
+
+**Gotchas:**
+
+- `/data/output` is the host's `output/` dir mounted via `-v $(pwd):/data`; the container's `builder` user (UID 1000) cannot write to a host dir owned by the runner user. The workflow runs `mkdir -p output && chmod 777 output` before `docker run`, so this must stay in sync with the Dockerfiles' `mkdir -p /data/output && chown builder:builder /data/output` (which only applies to non-mounted local builds).
 
 ## Repo hygiene
 
-- Only `LICENSE` is committed; `Docker/`, `SOURCE/`, `rpmbuild.sh`, `pullsrc.sh`, `version.env`, and `.github/` are all untracked.
+- All project files (`Docker/`, `SOURCE/`, `rpmbuild.sh`, `pullsrc.sh`, `version.env`, `.github/`, `.gitignore`, `README.md`, `AGENTS.md`) **are** committed.
+- **Never commit build artifacts**: `.gitignore` excludes `output/` (RPMs), `downloads/` (tarballs), `rpm-*/` dirs, `version-local.env`, and `*.bak`. If RPMs were accidentally committed, `git rm -r --cached` them.
+- History hygiene: when fixing a failed release attempt, prefer squashing fix commits into one clean commit (e.g. `git rebase -i` with `fixup`) instead of preserving fix history.

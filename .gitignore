@@ -1,0 +1,10 @@
+# Build artifacts (never commit)
+output/
+downloads/
+rpm-*/
+
+# Local version overrides
+version-local.env
+
+# sed -i.bak backups
+*.bak
