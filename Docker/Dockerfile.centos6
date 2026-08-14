@@ -1,0 +1,28 @@
+FROM centos:6
+WORKDIR /data
+
+RUN sed -e 's|enabled=1|enabled=0|' -i /etc/yum/pluginconf.d/fastestmirror.conf && \
+    sed -e "s|^mirrorlist=|#mirrorlist=|g" \
+      -e "s|^#baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=https://mirrors.ustc.edu.cn/centos-vault/6.10|g" \
+      -e "s|^#baseurl=http://mirror.centos.org/\$contentdir/\$releasever|baseurl=https://mirrors.ustc.edu.cn/centos-vault/6.10|g" \
+      -i.bak /etc/yum.repos.d/CentOS-*.repo && \
+    yum install -y epel-release centos-release-scl-rh centos-release-scl && \
+    sed -e "s|^mirrorlist=|#mirrorlist=|g" \
+      -e "s|^# *baseurl=http://mirror.centos.org/centos/6/sclo|baseurl=https://mirrors.ustc.edu.cn/centos-vault/6.10/sclo|g" \
+      -e "s|^#baseurl=http://download.fedoraproject.org/pub/epel/6/|baseurl=http://mirrors.aliyun.com/epel-archive/6/|g" \
+      -i.bak /etc/yum.repos.d/epel*.repo /etc/yum.repos.d/*scl*.repo && \
+    yum makecache fast && \
+    yum update -y
+
+
+RUN yum install -y wget autoconf automake gcc make rpm-build rpmdevtools \
+	util-linux-ng perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed \
+	wget openssl-devel libxml2-devel libxslt-devel gd-devel GeoIP-devel pcre-devel \
+	zlib-devel && \
+	useradd -m -u 1000 builder && \
+    yum clean all 
+
+USER builder
+RUN rpmdev-setuptree
+
+CMD ["/data/NGINX/rpmbuild.sh"]

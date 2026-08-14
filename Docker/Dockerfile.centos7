@@ -1,0 +1,25 @@
+FROM centos:7
+
+RUN MIRROR_URL=http://mirrors.ustc.edu.cn && \
+	sed -e 's|enabled=1|enabled=0|' -i /etc/yum/pluginconf.d/fastestmirror.conf && \
+	sed -e '/^mirrorlist=/s|^|#|g' \
+	  -e "s|^#baseurl=http://mirror.centos.org/centos/\$releasever/|baseurl=${MIRROR_URL}/centos-vault/7.9.2009/|g" \
+      -i.bak /etc/yum.repos.d/CentOS-*.repo && \
+    yum install -y epel-release && \
+    sed -e '/^mirrorlist=/s|^|#|g' \
+      -e "s|^#baseurl=http://download.fedoraproject.org/pub/epel/7/|baseurl=http://mirrors.aliyun.com/epel-archive/7/|g" \
+      -i.bak /etc/yum.repos.d/epel*.repo && \
+    yum makecache fast && \
+    yum update -y
+
+
+RUN yum install -y wget autoconf automake gcc make rpm-build rpmdevtools \
+	util-linux-ng perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed \
+	wget openssl-devel libxml2-devel libxslt-devel gd-devel GeoIP-devel pcre2-devel \
+	zlib-devel && \
+	useradd -m -u 1000 builder && \
+    yum clean all 
+
+USER builder
+RUN rpmdev-setuptree
+CMD ["/data/NGINX/rpmbuild.sh"]
