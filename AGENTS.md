@@ -65,7 +65,7 @@ All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirro
 Two GitHub Actions workflows:
 
 - **`.github/workflows/build-images.yml`** — manual trigger (`workflow_dispatch`). Builds and pushes `el5/el6/el7` images to `ghcr.io` as `ghcr.io/${{ github.repository }}:elX` (not `ngxbuild:elX` — that local tag is only for manual builds). Passes `MIRROR=0` to use official CentOS vault mirrors. Runs `./pullsrc.sh` first for the el5 build (needs the perl tarball in the build context).
-- **`.github/workflows/build-rpm.yml`** — triggers on `v*` tags. Pulls pre-built images from GHCR, runs builds for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release with zipped RPMs.
+- **`.github/workflows/build-rpm.yml`** — triggers on `v*` tags. Pulls pre-built images from GHCR, runs builds for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release with the RPM files directly (no zip).
 
 **Gotchas:**
 

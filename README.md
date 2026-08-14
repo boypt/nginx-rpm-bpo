@@ -18,7 +18,7 @@ Each distro builds inside its own Docker image, so you don't need an old CentOS 
 - `version.env` is the single source of truth for versions (`NGINX_VER`, `NGINX_REL`, `OPENSSL_VER`, `PERL_VER`).
 - `rpmbuild.sh` patches the spec template from `SOURCE/`, downloads the nginx/openssl tarballs (or reuses pre-downloaded ones from `downloads/`), builds the RPM, and copies it to `output/`.
 - The el5 image compiles its own perl 5.38 into `/usr/local/perl` because CentOS 5 ships perl 5.8, which is too old for modern OpenSSL/nginx.
-- CI (GitHub Actions) builds and publishes the Docker images to GHCR, and a `v*` tag triggers an RPM build + GitHub Release with zipped RPMs.
+- CI (GitHub Actions) builds and publishes the Docker images to GHCR, and a `v*` tag triggers an RPM build + GitHub Release with the RPM files directly.
 
 ## Manual build
 

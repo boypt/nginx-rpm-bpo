@@ -78,28 +78,17 @@ jobs:
         with:
           path: artifacts
 
-      - name: List downloaded artifacts
+      - name: Collect RPM files
         run: |
-          echo "Downloaded artifact directories:"
-          find artifacts -mindepth 1 -maxdepth 1 -type d
-
-      - name: Repackage artifacts with prefixed names
-        run: |
-          TAG=${{ github.ref_name }}
           mkdir -p release-assets
-          for dir in artifacts/*/; do
-            artifact_name=$(basename "$dir")
-            new_name="nginx_${TAG}_${artifact_name}"
-            echo "Packaging ${artifact_name} -> ${new_name}.zip"
-            (cd "$dir" && zip -r "${GITHUB_WORKSPACE}/release-assets/${new_name}.zip" .)
-          done
+          find artifacts -name '*.rpm' -exec cp {} release-assets/ \;
           echo "Release assets:"
           ls -la release-assets
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*.zip
+          files: release-assets/*.rpm
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
