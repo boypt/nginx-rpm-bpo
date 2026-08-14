@@ -16,21 +16,21 @@ Each distro builds inside its own Docker image, so you don't need an old CentOS 
 ## How it works
 
 - `version.env` is the single source of truth for versions (`NGINX_VER`, `NGINX_REL`, `OPENSSL_VER`, `PERL_VER`).
-- `rpmbuild.sh` patches the spec template from `SOURCE/`, downloads the nginx/openssl tarballs (or reuses pre-downloaded ones from `downloads/`), builds the RPM, and copies it to `output/`.
+- `./pullsrc.sh` downloads the nginx/openssl/perl tarballs into `downloads/`. `rpmbuild.sh` copies them from there, patches the spec template from `SOURCE/`, builds the RPM, and copies it to `output/`.
 - The el5 image compiles its own perl 5.38 into `/usr/local/perl` because CentOS 5 ships perl 5.8, which is too old for modern OpenSSL/nginx.
-- CI (GitHub Actions) builds and publishes the Docker images to GHCR, and a `v*` tag triggers an RPM build + GitHub Release with the RPM files directly.
+- CI (GitHub Actions) runs `pullsrc.sh` automatically, builds and publishes the Docker images to GHCR, and a `v*` tag triggers an RPM build + GitHub Release with the RPM files directly.
 
 ## Manual build
 
-### 1. Download sources (optional but recommended)
+### 1. Download sources (required)
 
-`rpmbuild.sh` can download nginx/openssl tarballs itself, but the el5 image build needs the perl tarball in the build context, and el5's old `wget` has no HTTPS support. Pre-download everything first:
+`rpmbuild.sh` does not download anything — run `./pullsrc.sh` first:
 
 ```sh
 ./pullsrc.sh
 ```
 
-This downloads `nginx-*.tar.gz`, `openssl-*.tar.gz`, and `perl-*.tar.gz` into `downloads/`.
+This downloads `nginx-*.tar.gz`, `openssl-*.tar.gz`, and `perl-*.tar.gz` into `downloads/`. The el5 image build needs the perl tarball in the build context, and el5's old `wget` has no HTTPS support, so all downloads happen on the host.
 
 ### 2. Build the Docker images
 

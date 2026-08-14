@@ -23,8 +23,8 @@ Deleting a test tag: `git push origin --delete v1.30.4_b2` (also delete the rele
 
 ## Downloading tarballs
 
-- `rpmbuild.sh` auto-downloads `nginx-${NGINX_VER}.tar.gz` from `nginx.org` and `${OPENSSL_VER}.tar.gz` from GitHub Releases into the rpmbuild SOURCES dir before building. No manual tarball placement needed.
-- For pre-downloading outside Docker (e.g. CI caching), run `./pullsrc.sh` — it downloads nginx, openssl, and perl tarballs to `downloads/`.
+- Run `./pullsrc.sh` first — it downloads nginx, openssl, and perl tarballs to `downloads/`. `rpmbuild.sh` does **not** download anything; it copies from `/data/downloads/` (the mounted `downloads/` dir) into the rpmbuild SOURCES dir, and exits with a hint if they're missing.
+- CI runs `./pullsrc.sh` automatically (both workflows) before building images or RPMs.
 - The perl tarball is only needed to build the el5 image: CentOS 5 ships perl 5.8 (too old for modern OpenSSL/nginx), so `Dockerfile.centos5` compiles perl 5.38 into `/usr/local/perl` from `./downloads/perl-*.tar.gz`.
 
 ## Build commands
@@ -54,7 +54,7 @@ All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirro
 ## rpmbuild.sh quirks
 
 - Determines `DIST` via `rpm --eval '%{?dist}'`. el5 has no matching src.rpm, so it reuses the `.el6` src.rpm and adds `--nomd5 --nosignature`.
-- Checks `/data/downloads/` for pre-downloaded tarballs first; falls back to downloading nginx/openssl sources itself (old el5 `wget` has no HTTPS support, so pre-download via `pullsrc.sh` is required there).
+- Requires `./pullsrc.sh` to have been run: copies `nginx-${NGINX_VER}.tar.gz` and `${OPENSSL_VER}.tar.gz` from `/data/downloads/` into the rpmbuild SOURCES dir (old el5 `wget` has no HTTPS support, so all downloads happen on the host / CI runner).
 - Patches `SPECS/nginx.spec` with `sed`: bumps `base_version`/`base_release`, adds `Source100` (openssl tarball), appends `--with-openssl=... --with-openssl-opt=no-tests`, extracts the openssl tarball during `%setup`/`%autosetup` (excluding tests), and deletes `Requires: openssl`.
 - `M32=1` switches to a 32-bit build: replaces `no-tests` with `linux-x86 no-tests`, adds `-m32` to `WITH_CC_OPT`/`WITH_LD_OPT`, and passes `--target=i686`.
 - Uses `sed -i.bak` for the main spec patch, but the M32 block uses `sed -i` (no backup). `.bak` files may be left beside `nginx.spec`.

@@ -12,46 +12,26 @@ RPMTOPDIR=$(rpm --eval '%_topdir')
 SRC_DIST=$DIST 
 SRC_OPTS=()
 
-# Download URLs
-NGINX_URL="https://nginx.org/download/nginx-${NGINX_VER}.tar.gz"
-OPENSSL_URL="https://github.com/openssl/openssl/releases/download/${OPENSSL_VER}/${OPENSSL_VER}.tar.gz"
+# Copy pre-downloaded tarballs (from ./pullsrc.sh) into the rpmbuild SOURCES dir.
+# Run ./pullsrc.sh first to populate downloads/.
+mkdir -p ${RPMTOPDIR}/SOURCES
 
-# Download tarballs if not already in SOURCES
-# First check downloads/ dir (pre-downloaded by CI via pullsrc.sh)
-# Then try direct download from upstream
-mkdir -p /tmp/nginx-downloads
-
-if [[ ! -f ${RPMTOPDIR}/SOURCES/nginx-${NGINX_VER}.tar.gz ]]; then
-    if [[ -f /data/downloads/nginx-${NGINX_VER}.tar.gz ]]; then
-        echo "Using pre-downloaded nginx-${NGINX_VER}.tar.gz..."
-        install -v -m 644 /data/downloads/nginx-${NGINX_VER}.tar.gz ${RPMTOPDIR}/SOURCES/
-    else
-        echo "Downloading nginx-${NGINX_VER}.tar.gz..."
-        wget --no-check-certificate -q \
-            -O /tmp/nginx-downloads/nginx-${NGINX_VER}.tar.gz "$NGINX_URL" || {
-            echo "!!! Failed to download nginx-${NGINX_VER}.tar.gz"
-            echo "!!! Please download it manually and place in the SOURCES dir."
+copy_sources() {
+    local name=$1
+    if [[ ! -f ${RPMTOPDIR}/SOURCES/${name}.tar.gz ]]; then
+        if [[ -f /data/downloads/${name}.tar.gz ]]; then
+            echo "Using pre-downloaded ${name}.tar.gz..."
+            install -v -m 644 /data/downloads/${name}.tar.gz ${RPMTOPDIR}/SOURCES/
+        else
+            echo "!!! ${name}.tar.gz not found in /data/downloads/"
+            echo "!!! Run ./pullsrc.sh first to download the sources."
             exit 1
-        }
-        install -v -m 644 /tmp/nginx-downloads/nginx-${NGINX_VER}.tar.gz ${RPMTOPDIR}/SOURCES/
+        fi
     fi
-fi
+}
 
-if [[ ! -f ${RPMTOPDIR}/SOURCES/${OPENSSL_VER}.tar.gz ]]; then
-    if [[ -f /data/downloads/${OPENSSL_VER}.tar.gz ]]; then
-        echo "Using pre-downloaded ${OPENSSL_VER}.tar.gz..."
-        install -v -m 644 /data/downloads/${OPENSSL_VER}.tar.gz ${RPMTOPDIR}/SOURCES/
-    else
-        echo "Downloading ${OPENSSL_VER}.tar.gz..."
-        wget --no-check-certificate -q \
-            -O /tmp/nginx-downloads/${OPENSSL_VER}.tar.gz "$OPENSSL_URL" || {
-            echo "!!! Failed to download ${OPENSSL_VER}.tar.gz"
-            echo "!!! Please download it manually and place in the SOURCES dir."
-            exit 1
-        }
-        install -v -m 644 /tmp/nginx-downloads/${OPENSSL_VER}.tar.gz ${RPMTOPDIR}/SOURCES/
-    fi
-fi
+copy_sources nginx-${NGINX_VER}
+copy_sources ${OPENSSL_VER}
 
 if [[ $DIST == .el5 ]]; then
   SRC_DIST=.el6
