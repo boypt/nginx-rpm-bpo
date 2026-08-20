@@ -10,7 +10,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-amd64:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,9 +32,6 @@ jobs:
             m32: "1"
             arch: i686
             artifact: rpm-el5-i686
-          - tag: aarch64_el7
-            arch: aarch64
-            artifact: rpm-el7-aarch64
 
     steps:
       - name: Checkout repository
@@ -69,8 +66,53 @@ jobs:
           path: output/*.rpm
           if-no-files-found: error
 
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        include:
+          - tag: aarch64_el7
+            arch: aarch64
+            artifact: rpm-el7-aarch64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run pullsrc.sh
+        run: ./pullsrc.sh
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run ${{ matrix.tag }}
+        run: |
+          mkdir -p output
+          chmod 777 output
+          docker run --rm \
+            -v $(pwd):/data \
+            -e "M32=${{ matrix.m32 }}" \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: output/*.rpm
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build-arm64, build-amd64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
