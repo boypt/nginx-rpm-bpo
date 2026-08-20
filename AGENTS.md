@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Nginx RPM Backport (`nginx-rpm-bpo`): builds nginx RPMs backported to EOL CentOS (el5/el6/el7), with a modern OpenSSL statically bundled into nginx so the RPM has no runtime `openssl` dependency. Each distro builds inside its own Docker image.
+Nginx RPM Backport (`nginx-rpm-bpo`): builds nginx RPMs backported to EOL CentOS (el5/el6/el7 x86_64 plus el7 aarch64 via `aarch64_el7`), with a modern OpenSSL statically bundled into nginx so the RPM has no runtime `openssl` dependency. Each distro builds inside its own Docker image.
 
 ## Version bump
 
@@ -17,7 +17,7 @@ When releasing a new nginx version (e.g. `1.30.4`), follow this order:
 3. **Commit** the changes (e.g. `chore: bump NGINX_REL to 2 for v1.30.4 release`).
 4. **Tag the commit** as `v${NGINX_VER}_b${NGINX_REL}` (e.g. `v1.30.4_b2`) and push the tag.
 
-Pushing the `v*` tag triggers `.github/workflows/build-rpm.yml`, which builds RPMs for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release. The built RPMs are **not** committed to the repo — only the tag/commit triggers the build.
+Pushing the `v*` tag triggers `.github/workflows/build-rpm.yml`, which builds RPMs for el5 (x86_64 + i686)/el6/el7 plus `aarch64_el7`, uploads artifacts, and creates a GitHub Release. The built RPMs are **not** committed to the repo — only the tag/commit triggers the build.
 
 Deleting a test tag: `git push origin --delete v1.30.4_b2` (also delete the release on GitHub if one was created).
 
@@ -37,6 +37,12 @@ docker build -f Docker/Dockerfile.centos6 -t ngxbuild:el6 .
 docker build -f Docker/Dockerfile.centos5 -t ngxbuild:el5 .
 ```
 
+`Docker/Dockerfile.centos7` serves both the `el7` (x86_64) and `aarch64_el7` (ARM64) targets. For aarch64, build/run with `--platform linux/arm64` locally so QEMU emulates the ARM64 container, or rely on the CI ARM runner (`ubuntu-24.04-arm`) which builds/runs it natively:
+
+```sh
+docker build --platform linux/arm64 -f Docker/Dockerfile.centos7 -t ngxbuild:aarch64_el7 .
+```
+
 Then run:
 
 ```sh
@@ -49,7 +55,7 @@ The repo root is mounted at `/data` inside the container. All scripts (`rpmbuild
 
 Building the el5 image requires `./downloads/perl-*.tar.gz` in the build context (referenced by `Dockerfile.centos5`). Run `./pullsrc.sh` first to download it.
 
-All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirrors instead of Chinese mirrors. `Docker/modify_yum_source.sh` handles the mirror switching. Note: el5 always uses `archive.kernel.org` over plain HTTP (its wget has no HTTPS support), regardless of the `MIRROR` arg; `MIRROR` only matters for el6/el7.
+All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirrors instead of Chinese mirrors. `Docker/modify_yum_source.sh` handles the mirror switching. Note: el5 always uses `archive.kernel.org` over plain HTTP (its wget has no HTTPS support), regardless of the `MIRROR` arg; `MIRROR` only matters for el6/el7. For `aarch64` (`uname -m = aarch64`), `modify_yum_source.sh` switches to the CentOS AltArch vault by appending `ALTARCH=/altarch` to the vault base URL (e.g. `.../centos-vault/altarch/7.9.2009/`). EL5 EPEL is also handled specially (uses `http://mirrors.aliyun.com/epel-archive` to avoid the old Python 2.4 TLS 1.0 → 302 → https failure on `archives.fedoraproject.org`).
 
 ## rpmbuild.sh quirks
 
@@ -64,8 +70,8 @@ All Dockerfiles accept `--build-arg MIRROR=0` to use official CentOS vault mirro
 
 Two GitHub Actions workflows:
 
-- **`.github/workflows/build-images.yml`** — manual trigger (`workflow_dispatch`). Builds and pushes `el5/el6/el7` images to `ghcr.io` as `ghcr.io/${{ github.repository }}:elX` (not `ngxbuild:elX` — that local tag is only for manual builds). Passes `MIRROR=0` to use official CentOS vault mirrors. Runs `./pullsrc.sh` first for the el5 build (needs the perl tarball in the build context).
-- **`.github/workflows/build-rpm.yml`** — triggers on `v*` tags. Pulls pre-built images from GHCR, runs builds for el5 (x86_64 + i686)/el6/el7, uploads artifacts, and creates a GitHub Release with the RPM files directly (no zip).
+- **`.github/workflows/build-images.yml`** — manual trigger (`workflow_dispatch`). Builds and pushes images to `ghcr.io` as `ghcr.io/${{ github.repository }}:elX` (not `ngxbuild:elX` — that local tag is only for manual builds). Matrix: `build-amd64` (el5/el6/el7 on `ubuntu-latest`) + `build-arm64` (`aarch64_el7` on `ubuntu-latest` with `setup-qemu-action` + `platforms: linux/arm64`). Cache: `type=gha`. Tags are per-arch (e.g. `ghcr.io/boypt/nginx-rpm-bpo:aarch64_el7`), not multi-arch manifests. Passes `MIRROR=0` to use official CentOS vault mirrors. Runs `./pullsrc.sh` first for the el5 build (needs the perl tarball in the build context).
+- **`.github/workflows/build-rpm.yml`** — triggers on `v*` tags. Pulls pre-built images from GHCR and builds RPMs. Matrix: `build-amd64` (el6/el7/el5 on `ubuntu-latest`) + `build-arm64` (`aarch64_el7` on `ubuntu-24.04-arm`, native ARM — no QEMU). The final `release` job needs both `build-amd64` and `build-arm64` to complete, then uploads artifacts and creates a GitHub Release with the RPM files directly (no zip). **Manifest mismatch fix:** the `aarch64_el7` image is `linux/arm64` only (not a multi-arch manifest), so it must run on an ARM runner (`ubuntu-24.04-arm`), not `ubuntu-latest` — running it on `ubuntu-latest` would fail because that runner is x86_64 and cannot execute a single-arch ARM64 image.
 
 **Gotchas:**
 
