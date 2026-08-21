@@ -18,16 +18,10 @@ jobs:
         include:
           - tag_suffix: el5
             dockerfile: ./Docker/Dockerfile.centos5
-            build_args: |
-              MIRROR=0
           - tag_suffix: el6
             dockerfile: ./Docker/Dockerfile.centos6
-            build_args: |
-              MIRROR=0
           - tag_suffix: el7
             dockerfile: ./Docker/Dockerfile.centos7
-            build_args: |
-              MIRROR=0
 
     steps:
       - name: Checkout repository
@@ -55,7 +49,6 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build_args }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_suffix }}
           cache-from: type=gha
@@ -71,8 +64,6 @@ jobs:
         include:
           - tag_suffix: aarch64_el7
             dockerfile: ./Docker/Dockerfile.centos7
-            build_args: |
-              MIRROR=0
 
     steps:
       - name: Checkout repository
@@ -100,7 +91,6 @@ jobs:
           context: .
           platforms: linux/arm64
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build_args }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_suffix }}
           cache-from: type=gha

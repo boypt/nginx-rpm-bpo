@@ -1,12 +1,10 @@
 FROM centos:5 AS builder
-ARG MIRROR=1
 WORKDIR /data
 
 COPY ./Docker/ /data/docker/
 COPY ./downloads/perl-*.tar.gz /data/
 
-RUN export MIRROR="$MIRROR" && \
-    bash ./docker/modify_yum_source.sh && \
+RUN bash ./docker/modify_vault_source.sh && \
     yum install -y gcc44 make
 
 RUN mkdir -p perl && tar xfz perl-*.tar.gz --strip-components=1 -C perl && pushd perl && \
@@ -16,15 +14,13 @@ RUN rm -rf perl-*.tar.gz perl
 
 
 FROM centos:5
-ARG MIRROR=1
 ENV PATH=/usr/local/perl/bin:$PATH
 WORKDIR /data
 
 COPY --from=builder /usr/local/perl /usr/local/perl
 COPY ./Docker/ /data/docker/
 
-RUN export MIRROR="$MIRROR" && \
-    bash ./docker/modify_yum_source.sh && \
+RUN bash ./docker/modify_vault_source.sh && \
     yum update -y && \
     yum install -y wget autoconf automake gcc44 make rpm-build rpmdevtools \
         util-linux-ng pcre-devel zlib-devel && \
