@@ -59,11 +59,18 @@ jobs:
             -e "M32=${{ matrix.m32 }}" \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
+      - name: Package RPMs into zip
+        run: |
+          cd output
+          zip -j ../${{ matrix.artifact }}.zip *.rpm
+          ls -lh ../${{ matrix.artifact }}.zip
+          unzip -l ../${{ matrix.artifact }}.zip
+
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: output/*.rpm
+          path: ${{ matrix.artifact }}.zip
           if-no-files-found: error
 
   build-arm64:
@@ -104,11 +111,18 @@ jobs:
             -e "M32=${{ matrix.m32 }}" \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
+      - name: Package RPMs into zip
+        run: |
+          cd output
+          zip -j ../${{ matrix.artifact }}.zip *.rpm
+          ls -lh ../${{ matrix.artifact }}.zip
+          unzip -l ../${{ matrix.artifact }}.zip
+
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: output/*.rpm
+          path: ${{ matrix.artifact }}.zip
           if-no-files-found: error
 
   release:
@@ -126,14 +140,14 @@ jobs:
       - name: Collect RPM files
         run: |
           mkdir -p release-assets
-          find artifacts -name '*.rpm' -exec cp {} release-assets/ \;
+          find artifacts -name '*.zip' -exec cp {} release-assets/ \;
           echo "Release assets:"
           ls -la release-assets
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*.rpm
+          files: release-assets/*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

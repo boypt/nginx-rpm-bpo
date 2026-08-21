@@ -8,7 +8,7 @@ RUN export MIRROR="$MIRROR" && \
     bash ./docker/modify_yum_source.sh && \
     yum update -y && \
     yum install -y wget autoconf automake gcc make rpm-build rpmdevtools \
-        util-linux-ng perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed \
+        util-linux-ng perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed perl-devel \
         openssl-devel libxml2-devel libxslt-devel gd-devel GeoIP-devel pcre-devel \
         zlib-devel && \
     useradd -m -u 1000 builder && \

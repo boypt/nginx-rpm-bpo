@@ -73,5 +73,34 @@ if [[ ${M32:-0} -eq 1 ]]; then
 fi
 rpmbuild -bb ${RPMTOPDIR}/SPECS/nginx.spec "${TARGET_OPT[@]+"${TARGET_OPT[@]}"}"
 
+# Build dynamic modules (el6/el7 only, no el5)
+if [[ $DIST != .el5 ]]; then
+    MODULES="nginx-module-njs nginx-module-geoip nginx-module-image-filter nginx-module-xslt nginx-module-perl"
+    for module in $MODULES; do
+        echo "=== Building $module ==="
+        cp /data/SOURCE/${module}.copyright ${RPMTOPDIR}/SOURCES/
+        if [[ $module == nginx-module-njs ]]; then
+            copy_sources njs-${NJS_VER}
+        fi
+        cp /data/SOURCE/${module}.spec ${RPMTOPDIR}/SPECS/
+        sed -i \
+            -e "/^%define base_version/s|[0-9.]\+|${NGINX_VER}|" \
+            -e "/^%define base_release/s|[0-9]?*|${NGINX_REL}|" \
+            ${RPMTOPDIR}/SPECS/${module}.spec
+        if [[ $module == nginx-module-njs ]]; then
+            sed -i -e "/^%define njs_version/s|[0-9.]\+|${NJS_VER}|" \
+                   -e "/^%define openssl_version/s|openssl-.*|${OPENSSL_VER}|" ${RPMTOPDIR}/SPECS/${module}.spec
+        fi
+        if [[ $DIST == .el6 ]]; then
+            sed -i -e 's|pcre2-config|pcre-config|g' -e 's|pcre2-devel|pcre-devel|g' ${RPMTOPDIR}/SPECS/${module}.spec
+            # njs on el6: libedit too old (rl_on_new_line missing), build CLI without readline
+            if [[ $module == nginx-module-njs ]]; then
+                sed -i -e '/BuildRequires: libedit-devel/d' ${RPMTOPDIR}/SPECS/${module}.spec
+            fi
+        fi
+        rpmbuild -bb ${RPMTOPDIR}/SPECS/${module}.spec "${TARGET_OPT[@]+"${TARGET_OPT[@]}"}"
+    done
+fi
+
 mkdir -p /data/output && \
 find $RPMTOPDIR/RPMS -name '*.rpm' -exec install -v -m644 {} /data/output \;

@@ -41,5 +41,15 @@ else
     echo "${PERL_VER}.tar.gz already exists, skipping."
 fi
 
+NJS_URL="https://github.com/nginx/njs/archive/refs/tags/${NJS_VER}.tar.gz"
+if [[ ! -f njs-${NJS_VER}.tar.gz ]]; then
+    echo "Downloading njs-${NJS_VER}.tar.gz..."
+    wget --no-check-certificate -q \
+        -O njs-${NJS_VER}.tar.gz "$NJS_URL" || \
+        echo "!!! Please download njs-${NJS_VER}.tar.gz in $PWD by yourself."
+else
+    echo "njs-${NJS_VER}.tar.gz already exists, skipping."
+fi
+
 popd
 echo "Done."
