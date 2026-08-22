@@ -43,6 +43,8 @@ docker build -f Docker/Dockerfile.centos5 -t ngxbuild:el5 .
 docker build --platform linux/arm64 -f Docker/Dockerfile.centos7 -t ngxbuild:aarch64_el7 .
 ```
 
+Local convention: launch long builds detached (logs under `/tmp/opencode/ngxbpo/*.log`) and display them live in a Herdr side pane (`herdr pane split --current --direction right --no-focus`, then `herdr pane run <pane> tail -F <logs>`), so progress is visible without polling.
+
 Then run:
 
 ```sh
@@ -55,7 +57,17 @@ The repo root is mounted at `/data` inside the container. All scripts (`rpmbuild
 
 Building the el5 image requires `./downloads/perl-*.tar.gz` in the build context (referenced by `Dockerfile.centos5`). Run `./pullsrc.sh` first to download it.
 
-`Docker/modify_vault_source.sh` rewrites yum repo baseurls to multiple failover mirrors (there is no `MIRROR` build-arg). Mirror lists live in arrays: `VAULT` (HTTPS, official-first; el7/el8 and the altarch tree), `VAULT_HTTP` (plain HTTP for el5/el6 — Python 2.4 / old curl cannot handle HTTPS), and `EPEL` (plain HTTP EPEL archive shared by el5/6/7). For `aarch64` (`uname -m = aarch64`), the el7 vault suffix gets `ALTARCH=/altarch` prepended so it uses the CentOS AltArch tree. The script also handles `.el8` (reserved for future use; not built yet).
+`Docker/modify_vault_source.sh` rewrites yum repo baseurls to multiple failover mirrors (there is no `MIRROR` build-arg). Mirror lists live in arrays: `VAULT` (HTTPS, fastest-reliable-first with the canonical vault.centos.org LAST — it persistently 403s repomd.xml from some networks and would waste a retry round per repo; el7/el8 and the altarch tree), `VAULT_HTTP` (plain HTTP for el5/el6 — Python 2.4 / old curl cannot handle HTTPS), and `EPEL` (plain HTTP EPEL archive shared by el5/6/7). For `aarch64` (`uname -m = aarch64`), the el7 vault suffix gets `ALTARCH=/altarch` prepended so it uses the CentOS AltArch tree. The script also handles `.el8` (reserved for future use; not built yet).
+
+### Docker image slimming techniques (applied 2026-08, learned from php-buildscript)
+
+1. **Bind mounts instead of COPY for build-time-only inputs.** A COPY layer stays in the image forever even if a later RUN deletes it. All Dockerfiles consume `modify_vault_source.sh` via `RUN --mount=type=bind`, and the el5 builder extracts the perl tarball from a bind-mounted `downloads/` — neither enters an image layer.
+2. **`.dockerignore` keeps the context minimal**: only `Docker/` + `downloads/perl-*.tar.gz` are sent to the builder (~21MB instead of the whole repo incl. `.git`, all tarballs, `output/`). Bind-mount sources must be allowed through `.dockerignore` or the build fails.
+3. **Locale pruning** in every image: keep only `en*` message catalogs, truncate/remove `/usr/lib/locale/locale-archive` (glibc regenerates on demand; build tooling runs in the C locale). Measure first: centos:6/7 bases are already lean here (~2MB), but **el5 glibc-common ships ~60MB of compiled locale dirs under `/usr/lib/locale/<name>/`** — prune non-`en*` dirs there too.
+4. **Package list trimmed to what the pipeline actually uses** — **no system openssl package is needed at all**: nginx/njs compile against the bundled OpenSSL tarball (`--with-openssl=...`), and `rpmbuild.sh` strips BOTH runtime `Requires:` and `BuildRequires:` openssl lines from the spec (the `/.*Requires: openssl.*/d` pattern even matches `BuildRequires: openssl-devel` by substring; an explicit `/^BuildRequires:.*openssl/d` was added so this doesn't depend on the substring accident). Dropped from the images: `openssl-devel`, `autoconf`/`automake` (nginx/njs ship pre-generated configure scripts), and `wget` from the explicit list (pullsrc.sh runs host-side; on el5/el6 rpmdevtools pulls wget back in transitively, el7 is truly clean).
+5. **Layer hygiene**: each image installs packages in a single RUN with `yum clean all` so yum caches never persist across layers (the old centos5 final stage left caches in its first RUN layer).
+6. **Never blind-`yum remove` post-install cruft on el5/el6** — removal cascades unpredictably through boot/system chains. Don't install it in the first place instead.
+7. **Verify trims with a real build**: package cuts are only proven safe by running `rpmbuild.sh` end-to-end inside the slimmed image (done for el6 2026-08: main nginx + all 5 dynamic modules built successfully).
 
 ## rpmbuild.sh quirks
 

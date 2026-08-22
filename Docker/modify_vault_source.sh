@@ -5,9 +5,10 @@
 # HTTPS redirects); EL7/EL8 keep HTTPS mirrors. EL8-stream is also EOL and lives
 # in the vault, so it is handled here too. EL7 and EL8 share the VAULT array
 # (yandex has no altarch tree, but the earlier failover mirrors cover aarch64).
-# VAULT is ordered official-first (the canonical CentOS vault, then the kernel.org
-# archive) so GitHub CI uses the canonical source; the remaining mirrors are
-# failover only. Only EL5/EL6 fall back to VAULT_HTTP (plain HTTP) due to the
+# VAULT is ordered fastest-reliable-first (measured 2026-08: vault.centos.org
+# persistently 403s repomd.xml from some networks, wasting a retry round per
+# repo before failover), with the canonical CentOS vault kept LAST as fallback.
+# Only EL5/EL6 fall back to VAULT_HTTP (plain HTTP) due to the
 # Python 2.4 TLS limitation; EL7/EL8 always use the HTTPS VAULT array.
 # EPEL archive mirrors (EPEL array) are plain HTTP and shared by EL7/EL6/EL5.
 #
@@ -26,16 +27,16 @@ RELEASE_VER=$(rpm --eval '%{?dist}')
 ALTARCH=""
 [ "$(uname -m)" = "aarch64" ] && ALTARCH="/altarch"
 
-# CentOS vault mirrors - official-first HTTPS, shared by el7/el7-altarch/el8
+# CentOS vault mirrors - HTTPS, shared by el7/el7-altarch/el8
 # Criteria: hosts 7.9.2009, altarch/7.9.2009 (aarch64) and 8-stream; HTTPS valid
 # (cert OK, no forced http->https 302, good for GitHub CI TLS); official priority
 # (canonical CentOS vault, then kernel.org archive)
 # shellcheck disable=SC2034
 VAULT=(
-	"https://vault.centos.org"
 	"https://archive.kernel.org/centos-vault"
 	"https://mirrors.aliyun.com/centos-vault"
 	"https://ftp.iij.ad.jp/pub/linux/centos-vault"
+	"https://vault.centos.org"
 )
 # CentOS vault mirrors - plain HTTP for EL5/6 (hosts 5.11, 6.10 and 6.10/sclo;
 # http only, no forced https redirect, avoids EL5 Python 2.4 / old curl TLS 1.0 failure)

@@ -48,6 +48,7 @@ if [[ $SRC_DIST == .el6 ]]; then
 		-e "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=$OPENSSL_VER --with-openssl-opt=no-tests|g" \
 		-e '/%setup -q/a tar zxf %{SOURCE100} --exclude=openssl*/tests' \
 		-e '/.*Requires: openssl.*/d' \
+		-e '/^BuildRequires:.*openssl/d' \
 		${RPMTOPDIR}/SPECS/nginx.spec
 elif [[ $SRC_DIST == .el7 ]]; then
 	sed -i.bak \
@@ -57,6 +58,7 @@ elif [[ $SRC_DIST == .el7 ]]; then
 		-e "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=$OPENSSL_VER --with-openssl-opt=no-tests|g" \
 		-e '/^%autosetup/a tar zxf %{SOURCE100} --exclude=openssl*/tests' \
 		-e '/.*Requires: openssl.*/d' \
+		-e '/^BuildRequires:.*openssl/d' \
 		${RPMTOPDIR}/SPECS/nginx.spec
 fi
 

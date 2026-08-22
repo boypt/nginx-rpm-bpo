@@ -1,35 +1,46 @@
 FROM centos:5 AS builder
 WORKDIR /data
 
-COPY ./Docker/ /data/docker/
-COPY ./downloads/perl-*.tar.gz /data/
-
-RUN bash ./docker/modify_vault_source.sh && \
+RUN --mount=type=bind,source=Docker/modify_vault_source.sh,target=/mnt/modify_vault_source.sh \
+    bash /mnt/modify_vault_source.sh && \
     yum install -y gcc44 make
 
-RUN mkdir -p perl && tar xfz perl-*.tar.gz --strip-components=1 -C perl && pushd perl && \
+# extract the perl tarball via bind mount: mounted files never enter an image
+# layer, unlike COPY + later "rm -rf" (the whiteout keeps the bytes forever)
+RUN --mount=type=bind,source=downloads,target=/mnt/downloads \
+    mkdir -p perl && tar xfz /mnt/downloads/perl-*.tar.gz --strip-components=1 -C perl && pushd perl && \
     ./Configure -des -Dusethreads -Uuseshrplib -Uoptimize=-g -Dcc=gcc44 -Dprefix=/usr/local/perl && \
     make $(rpm --eval %{?_smp_mflags}) && make install_strip
-RUN rm -rf perl-*.tar.gz perl
 
 
 FROM centos:5
 ENV PATH=/usr/local/perl/bin:$PATH
 WORKDIR /data
 
+# must reference the builder stage, or BuildKit skips building it entirely
 COPY --from=builder /usr/local/perl /usr/local/perl
-COPY ./Docker/ /data/docker/
 
-RUN bash ./docker/modify_vault_source.sh && \
+# single RUN so yum caches never persist across layers; package list trimmed:
+# wget not listed (pullsrc.sh runs on the host; rpmdevtools pulls it back in
+# transitively), autoconf/automake dropped (nginx/njs ship pre-generated
+# configure scripts)
+RUN --mount=type=bind,source=Docker/modify_vault_source.sh,target=/mnt/modify_vault_source.sh \
+    bash /mnt/modify_vault_source.sh && \
     yum update -y && \
-    yum install -y wget autoconf automake gcc44 make rpm-build rpmdevtools \
+    yum install -y gcc44 make rpm-build rpmdevtools \
         util-linux-ng pcre-devel zlib-devel && \
     useradd -m -u 1000 builder && \
-    mkdir -p /data/output && chown builder:builder /data/output
-
-RUN cat /etc/yum.repos.d/CentOS-Base.repo | sed 's|]$|-i386]|;s|\$basearch|i386|g' > /etc/yum.repos.d/CentOS-Base-i386.repo && \
+    mkdir -p /data/output && chown builder:builder /data/output && \
+    cat /etc/yum.repos.d/CentOS-Base.repo | sed 's|]$|-i386]|;s|\$basearch|i386|g' > /etc/yum.repos.d/CentOS-Base-i386.repo && \
     yum install -y glibc-devel.i386 libgcc.i386 zlib-devel.i386 pcre-devel.i386 && \
-    yum clean all
+    yum clean all && \
+    # prune unneeded locale data: build tooling runs in the C locale, so only
+    # en* entries are kept. el5 glibc-common ships compiled locales as
+    # directories under /usr/lib/locale (~60MB) besides the archive and the
+    # message catalogs under /usr/share/locale; glibc regenerates on demand.
+    find /usr/share/locale -mindepth 1 -maxdepth 1 -type d ! -name 'en*' ! -name C -exec rm -rf {} + && \
+    find /usr/lib/locale -mindepth 1 -maxdepth 1 -type d ! -name 'en*' ! -name C* -exec rm -rf {} + && \
+    rm -f /usr/lib/locale/locale-archive
 
 USER builder
 RUN echo -e "%dist .el5\n%centos 5\n" | tee -a ~/.rpmmacros

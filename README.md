@@ -53,7 +53,7 @@ docker build --platform linux/arm64 -f Docker/Dockerfile.centos7 -t ngxbuild:aar
 
 In CI the `aarch64_el7` image is built with QEMU (`setup-qemu-action` + `platforms: linux/arm64`) on `ubuntu-latest`, so you normally don't build it by hand.
 
-Yum repos inside the images are rewritten to multiple failover CentOS vault / EPEL archive mirrors (official-first; see `Docker/modify_vault_source.sh`), so no mirror switching is needed.
+Yum repos inside the images are rewritten to multiple failover CentOS vault / EPEL archive mirrors (fastest-reliable-first, canonical vault kept as last-resort fallback; see `Docker/modify_vault_source.sh`), so no mirror switching is needed.
 
 ### 3. Build the RPMs
 

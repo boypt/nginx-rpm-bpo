@@ -1,17 +1,30 @@
 FROM centos:6
 WORKDIR /data
 
-COPY ./Docker/ /data/docker/
-
-RUN bash ./docker/modify_vault_source.sh && \
+# Package list trimmed to what rpmbuild.sh + the specs actually require:
+# - autoconf/automake dropped: nginx/njs ship pre-generated configure scripts,
+#   no spec references them (wget is not listed either, but still lands in the
+#   image because rpmdevtools requires it)
+# - openssl-devel dropped: rpmbuild.sh strips BOTH runtime "Requires:" and
+#   "BuildRequires:" openssl lines from the spec; nginx/njs compile against
+#   the bundled OpenSSL tarball only, system openssl is never used
+# - gd/GeoIP/libxml2/libxslt/pcre/zlib/perl-* kept: real BuildRequires of the
+#   dynamic-module specs
+RUN --mount=type=bind,source=Docker/modify_vault_source.sh,target=/mnt/modify_vault_source.sh \
+    bash /mnt/modify_vault_source.sh && \
     yum update -y && \
-    yum install -y wget autoconf automake gcc make rpm-build rpmdevtools \
-        util-linux-ng perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed perl-devel \
-        openssl-devel libxml2-devel libxslt-devel gd-devel GeoIP-devel pcre-devel \
+    yum install -y gcc make rpm-build rpmdevtools util-linux-ng \
+        perl perl-IPC-Cmd perl-Time-Piece perl-ExtUtils-Embed perl-devel \
+        libxml2-devel libxslt-devel gd-devel GeoIP-devel pcre-devel \
         zlib-devel && \
     useradd -m -u 1000 builder && \
     mkdir -p /data/output && chown builder:builder /data/output && \
-    yum clean all
+    yum clean all && \
+    # prune unneeded locale data (~185MB on el6): build tooling runs in the C
+    # locale, so only en* message catalogs are kept and the glibc locale-archive
+    # is truncated (glibc regenerates it on demand)
+    find /usr/share/locale -mindepth 1 -maxdepth 1 -type d ! -name 'en*' ! -name C -exec rm -rf {} + && \
+    : > /usr/lib/locale/locale-archive
 
 USER builder
 RUN rpmdev-setuptree

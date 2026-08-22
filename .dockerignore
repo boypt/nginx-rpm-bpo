@@ -1,0 +1,8 @@
+# Keep the build context minimal: only what the Dockerfiles actually consume.
+# Everything else (git history, downloaded tarballs, built RPMs, CI config) is
+# mounted at runtime via -v .:/data and must not be sent to the builder.
+*
+!Docker/
+!downloads/
+downloads/*
+!downloads/perl-*.tar.gz
