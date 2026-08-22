@@ -84,15 +84,26 @@ if [[ $DIST != .el5 ]]; then
         if [[ $module == nginx-module-njs ]]; then
             copy_sources njs-${NJS_VER}
         fi
-        cp /data/SOURCE/${module}.spec ${RPMTOPDIR}/SPECS/
+    cp /data/SOURCE/${module}.spec ${RPMTOPDIR}/SPECS/
+    sed -i \
+        -e "/^%define base_version/s|[0-9.]\+|${NGINX_VER}|" \
+        -e "/^%define base_release/s|[0-9]?*|${NGINX_REL}|" \
+        ${RPMTOPDIR}/SPECS/${module}.spec
+    if [[ $module == nginx-module-njs ]]; then
+        sed -i -e "/^%define njs_version/s|[0-9.]\+|${NJS_VER}|" \
+               -e "/^%define openssl_version/s|openssl-.*|${OPENSSL_VER}|" ${RPMTOPDIR}/SPECS/${module}.spec
+    else
+        # non-njs specs enable SSL modules but carry no --with-openssl, so
+        # nginx's configure probes SYSTEM OpenSSL (b6 only passed because
+        # openssl-devel was installed). Wire them to the bundled tarball like
+        # the main/njs builds: with --with-openssl set, configure skips the
+        # system probe and make compiles openssl into .openssl itself.
         sed -i \
-            -e "/^%define base_version/s|[0-9.]\+|${NGINX_VER}|" \
-            -e "/^%define base_release/s|[0-9]?*|${NGINX_REL}|" \
+            -e "s|^Source0: nginx-%{base_version}.tar.gz|Source0: nginx-%{base_version}.tar.gz\nSource101: ${OPENSSL_VER}.tar.gz|" \
+            -e "s|^tar --strip-components=1 -zxf %{SOURCE0}|tar xzf %{SOURCE101} --exclude=openssl*/tests\ntar --strip-components=1 -zxf %{SOURCE0}|" \
+            -e "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=${OPENSSL_VER} --with-openssl-opt=no-tests|" \
             ${RPMTOPDIR}/SPECS/${module}.spec
-        if [[ $module == nginx-module-njs ]]; then
-            sed -i -e "/^%define njs_version/s|[0-9.]\+|${NJS_VER}|" \
-                   -e "/^%define openssl_version/s|openssl-.*|${OPENSSL_VER}|" ${RPMTOPDIR}/SPECS/${module}.spec
-        fi
+    fi
         if [[ $DIST == .el6 ]]; then
             sed -i -e 's|pcre2-config|pcre-config|g' -e 's|pcre2-devel|pcre-devel|g' ${RPMTOPDIR}/SPECS/${module}.spec
             # njs on el6: libedit too old (rl_on_new_line missing), build CLI without readline
