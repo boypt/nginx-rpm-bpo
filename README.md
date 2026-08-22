@@ -9,7 +9,7 @@ Each distro builds inside its own Docker image, so you don't need an old CentOS 
 | Component | Version |
 |---|---|
 | NGINX | 1.30.4 |
-| Release | b6 |
+| Release | b7 |
 | OpenSSL (bundled) | openssl-3.5.7 |
 | Perl (el5 only, built into image) | perl-5.38.2 |
 | njs | 1.0.0 |
@@ -88,8 +88,8 @@ Finished RPMs land in `output/`. On el6/el7 the output also contains dynamic mod
 Dynamic modules are installed separately and require the main `nginx` package:
 
 ```sh
-yum install nginx-1.30.4-6.el7.ngx.x86_64.rpm
-yum install nginx-module-njs-1.30.4+1.0.0-6.el7.ngx.x86_64.rpm
+yum install nginx-1.30.4-7.el7.ngx.x86_64.rpm
+yum install nginx-module-njs-1.30.4+1.0.0-7.el7.ngx.x86_64.rpm
 # then enable in nginx.conf: load_module modules/ngx_http_js_module.so;
 ```
 
