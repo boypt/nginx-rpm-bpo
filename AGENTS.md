@@ -79,6 +79,67 @@ Building the el5 image requires `./downloads/perl-*.tar.gz` in the build context
 - Uses `sed -i.bak` for the main spec patch, but the M32 block uses `sed -i` (no backup). `.bak` files may be left beside `nginx.spec`.
 - Finished RPMs are copied to `/data/output/`.
 
+## Dynamic modules (`nginx-module-*`)
+
+5 dynamic modules, built **only on el6 / el7 / aarch64_el7** — el5 is excluded (`rpmbuild.sh:77` `if [[ $DIST != .el5 ]]`). `MODULES` list at `rpmbuild.sh:78`:
+
+```
+nginx-module-njs nginx-module-geoip nginx-module-image-filter nginx-module-xslt nginx-module-perl
+```
+
+### Build flow (`rpmbuild.sh:77-103`)
+
+For each `$module` in `MODULES`:
+
+1. `cp SOURCE/${module}.copyright` → `SOURCES/` (license file packaged by spec).
+2. **njs only:** `copy_sources njs-${NJS_VER}` → `SOURCES/` (extra tarball `njs-${NJS_VER}.tar.gz`; main nginx/openssl tarballs already staged at `rpmbuild.sh:33-34`).
+3. `cp SOURCE/${module}.spec` → `SPECS/` then `sed`-patch:
+   - all modules: `base_version` → `$NGINX_VER`, `base_release` → `$NGINX_REL`
+   - njs only: `njs_version` → `$NJS_VER`, `openssl_version` → `$OPENSSL_VER` (`rpmbuild.sh:90-92`)
+4. **el6 compat shims** (`rpmbuild.sh:94-99`, applies to every module):
+   - `pcre2-config → pcre-config`, `pcre2-devel → pcre-devel` (el6 has only `pcre-devel`)
+   - njs: drop `BuildRequires: libedit-devel` (not in el6 repos)
+5. `rpmbuild -bb SPECS/${module}.spec` — output lands in `RPMS/` then copied to `/data/output/` alongside the main `nginx-*.rpm`.
+
+`M32=1` (el5 32-bit) also flows into module builds via `TARGET_OPT` (`--target=i686` + `-m32` in `WITH_CC_OPT`/`WITH_LD_OPT`).
+
+### SOURCE layout
+
+- **Main nginx:** `SOURCE/nginx-1.19.5-1.el6.ngx.src.rpm` (el5/el6 template) and `SOURCE/nginx-1.27.0-2.el7.ngx.src.rpm` (el7/aarch64_el7 template). Only the `.spec` inside is used; `rpmbuild.sh` overwrites `base_version`/`base_release` and injects `Source100` (openssl) via `sed` (anchor `Source12` on el6 vs `Source9` on el7).
+- **Modules:** flat `SOURCE/nginx-module-*.spec` + `SOURCE/nginx-module-*.copyright` (not `.src.rpm`). The spec is `cp`'d directly to `SPECS/` and patched in place. Hardcoded `%define base_version/base_release/njs_version/openssl_version` defaults in the spec are all overwritten at build time.
+
+### Spec skeleton (all 5 modules share this)
+
+- `%if 0%{?rhel}==7` → `Epoch: 1`, `dist .el7`; otherwise el6 path (e.g. `NJS_NEEDS_FIX` for njs).
+- `BuildRequires: pcre2-devel` (rewritten to `pcre-devel` on el6), `WITH_CC_OPT` uses `pcre2-config --cflags`.
+- `BASE_CONFIGURE_ARGS` includes `--with-compat` (ABI-compat dynamic module) and `--with-openssl=%{openssl_version} --with-openssl-opt=no-tests` — modules bundle the same static `openssl-${OPENSSL_VER}` as main nginx (see njs spec `Source101`).
+- `MODULE_CONFIGURE_ARGS` is the only per-module difference:
+  - `njs`: `--add-dynamic-module=njs-%{njs_version}/nginx` (+ `Source100` njs tarball, `libedit`/`libxml2`/`libxslt-devel`)
+  - `geoip`: `--with-http_geoip_module=dynamic --with-stream_geoip_module=dynamic` (`GeoIP-devel`)
+  - `image-filter`: `--with-http_image_filter_module=dynamic` (`gd-devel`)
+  - `xslt`: `--with-http_xslt_module=dynamic` (`libxslt-devel`)
+  - `perl`: `--with-http_perl_module=dynamic` (`perl-devel`, `perl-ExtUtils-Embed`)
+- `%build` does `./configure $BASE_CONFIGURE_ARGS $MODULE_CONFIGURE_ARGS --with-cc-opt=... --with-ld-opt=...` then `make modules`; `%install` copies `objs/*.so` to `%{moddir}`.
+
+### Dockerfile deps (per-distro)
+
+- **el5** (`Docker/Dockerfile.centos5`): `gcc44` toolchain + self-compiled `perl-5.38` into `/usr/local/perl`; only `pcre-devel zlib-devel` — no module `-devel` deps because modules are not built.
+- **el6** (`Docker/Dockerfile.centos6`): `pcre-devel` (not `pcre2`), `GeoIP-devel gd-devel libxml2-devel libxslt-devel openssl-devel`, `perl*` — **no `libedit-devel`, no `pcre2-devel`**.
+- **el7** (`Docker/Dockerfile.centos7`, also `aarch64_el7`): same as el6 plus `pcre2-devel` and `libedit-devel` (required by `njs` spec default). `aarch64_el7` uses CentOS AltArch vault (`/altarch`).
+
+### CI / output
+
+`build-rpm.yml` matrix builds `el6`/`el7`/`aarch64_el7` and zips `output/*.rpm` via `zip -j ../${artifact}.zip *.rpm` — any `nginx-module-*.rpm` in `output/` is automatically included. No workflow change needed when adding a module.
+
+### Adding a new dynamic module — checklist
+
+1. Add `SOURCE/nginx-module-<name>.spec` (copy `nginx-module-njs.spec` skeleton; set `BASE_CONFIGURE_ARGS` with `--with-compat` + bundled openssl, set `MODULE_CONFIGURE_ARGS` appropriately; declare `BuildRequires` and `Source100` if the module needs an external tarball like njs does).
+2. Add `SOURCE/nginx-module-<name>.copyright`.
+3. Append the name to `MODULES` at `rpmbuild.sh:78`.
+4. If the module needs a tarball, extend the `copy_sources` logic (`rpmbuild.sh:82-84` pattern) and update `pullsrc.sh` to download it.
+5. Add any new `-devel` deps to `Docker/Dockerfile.centos7` (and `centos6` if el6 is supported; add `pcre2→pcre` / `libedit` shims in `rpmbuild.sh:94-99` if needed).
+6. No CI change required — RPM will be auto-zipped.
+
 ## CI
 
 Two GitHub Actions workflows:
