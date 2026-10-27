@@ -40,6 +40,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Load NGINX version
+        run: echo "NGINX_VER=$(sed -n 's/^NGINX_VER=//p' version.env)" >> $GITHUB_ENV
+
       - name: Run pullsrc.sh
         run: ./pullsrc.sh
 
@@ -62,15 +65,16 @@ jobs:
       - name: Package RPMs into zip
         run: |
           cd output
-          zip -j ../${{ matrix.artifact }}.zip *.rpm
-          ls -lh ../${{ matrix.artifact }}.zip
-          unzip -l ../${{ matrix.artifact }}.zip
+          ZIP="nginx-${NGINX_VER}-${{ matrix.artifact }}.zip"
+          zip -j ../$ZIP *.rpm
+          ls -lh ../$ZIP
+          unzip -l ../$ZIP
 
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          name: nginx-${{ env.NGINX_VER }}-${{ matrix.artifact }}
+          path: nginx-${{ env.NGINX_VER }}-${{ matrix.artifact }}.zip
           if-no-files-found: error
 
   build-arm64:
@@ -91,6 +95,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Load NGINX version
+        run: echo "NGINX_VER=$(sed -n 's/^NGINX_VER=//p' version.env)" >> $GITHUB_ENV
 
       - name: Run pullsrc.sh
         run: ./pullsrc.sh
@@ -114,15 +121,16 @@ jobs:
       - name: Package RPMs into zip
         run: |
           cd output
-          zip -j ../${{ matrix.artifact }}.zip *.rpm
-          ls -lh ../${{ matrix.artifact }}.zip
-          unzip -l ../${{ matrix.artifact }}.zip
+          ZIP="nginx-${NGINX_VER}-${{ matrix.artifact }}.zip"
+          zip -j ../$ZIP *.rpm
+          ls -lh ../$ZIP
+          unzip -l ../$ZIP
 
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          name: nginx-${{ env.NGINX_VER }}-${{ matrix.artifact }}
+          path: nginx-${{ env.NGINX_VER }}-${{ matrix.artifact }}.zip
           if-no-files-found: error
 
   release:
