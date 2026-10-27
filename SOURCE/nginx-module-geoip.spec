@@ -10,7 +10,7 @@ Epoch: %{epoch}
 
 BuildRequires: GeoIP-devel
 
-%define base_version 1.30.4
+%define base_version 1.30.6
 %define base_release 1%{?dist}.ngx
 %define bdir %{_builddir}/%{name}-%{base_version}
 

@@ -12,7 +12,7 @@ BuildRequires: perl-devel
 BuildRequires: perl-ExtUtils-Embed
 Requires: perl(:MODULE_COMPAT_%(eval "`%{__perl} -V:version`"; echo $$version))
 
-%define base_version 1.30.4
+%define base_version 1.30.6
 %define base_release 1%{?dist}.ngx
 %define bdir %{_builddir}/%{name}-%{base_version}
 

@@ -18,10 +18,10 @@ BuildRequires: libedit-devel
 BuildRequires: libxml2-devel
 BuildRequires: libxslt-devel
 
-%define base_version 1.30.4
+%define base_version 1.30.6
 %define base_release 1%{?dist}.ngx
 %define njs_version 1.0.0
-%define openssl_version openssl-3.5.7
+%define openssl_version openssl-3.5.9
 %define bdir %{_builddir}/%{name}-%{base_version}
 
 Summary: nginx njs dynamic modules
