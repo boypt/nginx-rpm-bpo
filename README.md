@@ -88,8 +88,8 @@ Finished RPMs land in `output/`. On el6/el7 the output also contains dynamic mod
 Dynamic modules are installed separately and require the main `nginx` package:
 
 ```sh
-yum install nginx-1.30.7-1.el7.ngx.x86_64.rpm
-yum install nginx-module-njs-1.30.7+1.0.2-1.el7.ngx.x86_64.rpm
+yum install nginx-*.el7.ngx.x86_64.rpm
+yum install nginx-module-njs-*.el7.ngx.x86_64.rpm
 # then enable in nginx.conf: load_module modules/ngx_http_js_module.so;
 ```
 
